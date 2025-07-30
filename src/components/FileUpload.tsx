@@ -17,7 +17,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({
   onFileSelect,
   accept,
   label,
-  maxSize = 100 * 1024 * 1024 // 100MB default
+  maxSize = 500 * 1024 * 1024 // 500MB default
 }) => {
   const onDrop = useCallback((acceptedFiles: File[]) => {
     if (acceptedFiles.length > 0) {
