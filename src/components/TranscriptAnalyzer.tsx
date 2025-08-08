@@ -34,6 +34,23 @@ export const TranscriptAnalyzer: React.FC = () => {
   const [progress, setProgress] = useState(0);
   const [analysisData, setAnalysisData] = useState<AnalysisData | null>(null);
   const [correctedTranscript, setCorrectedTranscript] = useState<string>('');
+  const [downloads, setDownloads] = useState<{
+    txt: { b64: string; name: string; mime: string };
+    docx: { b64: string; name: string; mime: string };
+  } | null>(null);
+
+  const downloadBase64 = (b64: string, filename: string, mime: string) => {
+    const bytes = atob(b64);
+    const buf = new Uint8Array(bytes.length);
+    for (let i = 0; i < bytes.length; i++) buf[i] = bytes.charCodeAt(i);
+    const blob = new Blob([buf], { type: mime });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
   const handleAnalyze = async () => {
     if (!transcriptFile || !audioFile) {
@@ -49,71 +66,42 @@ export const TranscriptAnalyzer: React.FC = () => {
     setProgress(0);
 
     try {
-      // Simulate analysis process with realistic steps
-      const steps = [
-        { name: "Reading transcript file...", duration: 1000 },
-        { name: "Processing audio file...", duration: 2000 },
-        { name: "Transcribing audio with AI...", duration: 3000 },
-        { name: "Comparing transcripts...", duration: 2000 },
-        { name: "Identifying errors...", duration: 1500 },
-        { name: "Generating corrections...", duration: 2000 },
-        { name: "Finalizing analysis...", duration: 500 }
-      ];
+      if (!transcriptFile || !audioFile) return; // Should not happen due to button disable logic, but good for type safety
+      const formData = new FormData();
+      formData.append('transcript', transcriptFile);
+      formData.append('audio', audioFile);
 
-      let currentProgress = 0;
-      for (const [index, step] of steps.entries()) {
-        toast({
-          title: "Processing",
-          description: step.name,
-          duration: step.duration,
-        });
-        
-        await new Promise(resolve => setTimeout(resolve, step.duration));
-        currentProgress = ((index + 1) / steps.length) * 100;
-        setProgress(currentProgress);
+      // Simulate progress while uploading and processing
+      setProgress(10);
+      toast({ title: "Uploading files...", duration: 2000 });
+      await new Promise(resolve => setTimeout(resolve, 1000));
+
+      const response = await fetch('/api/analyze', {
+        method: 'POST',
+        body: formData,
+      });
+
+      setProgress(50);
+      toast({ title: "Analyzing transcript...", description: "This may take a moment.", duration: 4000 });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
       }
 
-      // Mock analysis results
-      const mockAnalysis: AnalysisData = {
-        errors: [
-          {
-            line: 15,
-            column: 23,
-            original: "councelor",
-            suggested: "counselor",
-            confidence: 0.95,
-            type: "spelling"
-          },
-          {
-            line: 42,
-            column: 18,
-            original: "their",
-            suggested: "there",
-            confidence: 0.87,
-            type: "audio_mismatch"
-          },
-          {
-            line: 67,
-            column: 8,
-            original: "subpeona",
-            suggested: "subpoena",
-            confidence: 0.98,
-            type: "legal_term"
-          }
-        ],
-        statistics: {
-          totalErrors: 3,
-          confidenceScore: 0.93,
-          processingTime: 12.5
-        }
-      };
+      const data = await response.json();
 
-      setAnalysisData(mockAnalysis);
-      setCorrectedTranscript("Mock corrected transcript content...");
+      setProgress(100);
+
+      setAnalysisData(data.analysis);
+      setCorrectedTranscript(data.correctedTranscript);
+      setDownloads({
+        txt: { b64: data.downloads.txt_base64, name: data.downloads.filenames.txt, mime: 'text/plain' },
+        docx: { b64: data.downloads.docx_base64, name: data.downloads.filenames.docx, mime: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' },
+      });
 
       toast({
         title: "Analysis Complete",
-        description: `Found ${mockAnalysis.errors.length} potential errors with ${Math.round(mockAnalysis.statistics.confidenceScore * 100)}% confidence`,
+        description: `Found ${data.analysis.errors.length} potential errors with ${Math.round(data.analysis.statistics.confidenceScore * 100)}% confidence`,
         variant: "default",
       });
     } catch (error) {
@@ -125,20 +113,6 @@ export const TranscriptAnalyzer: React.FC = () => {
     } finally {
       setIsProcessing(false);
     }
-  };
-
-  const handleDownload = () => {
-    if (!correctedTranscript) return;
-    
-    const blob = new Blob([correctedTranscript], { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `corrected_transcript_${new Date().toISOString().split('T')[0]}.txt`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
   };
 
   return (
@@ -269,9 +243,23 @@ export const TranscriptAnalyzer: React.FC = () => {
                 <>
                   <AnalysisResults data={analysisData} />
                   <div className="flex justify-center gap-4">
-                    <Button onClick={handleDownload} variant="accent" size="lg">
+                    <Button
+                      onClick={() => downloads && downloadBase64(downloads.txt.b64, downloads.txt.name, downloads.txt.mime)}
+                      variant="accent"
+                      size="lg"
+                      disabled={!downloads}
+                    >
                       <Download className="h-4 w-4 mr-2" />
-                      Download Corrected Transcript
+                      Download .txt
+                    </Button>
+                    <Button
+                      onClick={() => downloads && downloadBase64(downloads.docx.b64, downloads.docx.name, downloads.docx.mime)}
+                      variant="accent"
+                      size="lg"
+                      disabled={!downloads}
+                    >
+                      <Download className="h-4 w-4 mr-2" />
+                      Download .docx
                     </Button>
                   </div>
                 </>

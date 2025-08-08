@@ -1,71 +1,43 @@
-## Project info
+# Court Transcript Analyzer
 
-**URL**: https://lovable.dev/projects/fd029b32-bf3e-4684-b6eb-183b2da3d2d2
+This project is a web application for analyzing court transcripts. It allows users to upload a transcript file and a corresponding audio file, and the application will analyze them to find potential errors.
 
-## How can I edit this code?
+The application is composed of three parts:
+1.  A React frontend for the user interface.
+2.  A Node.js server that acts as a proxy.
+3.  A Python service that performs the transcript alignment and analysis.
 
-There are several ways of editing your application.
+## Running the Application
 
-**Use Lovable**
+To run the application, you will need to run all three services concurrently in separate terminal windows.
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/fd029b32-bf3e-4684-b6eb-183b2da3d2d2) and start prompting.
+### 1. Python Alignment Service
 
-Changes made via Lovable will be committed automatically to this repo.
-
-**Use your preferred IDE**
-
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
-
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
-
-Follow these steps:
-
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
-
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
-
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
-npm run dev
+```bash
+cd alignment_service
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+./run.sh
 ```
 
-**Edit a file directly in GitHub**
+This service will run on `http://localhost:8000`.
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+### 2. Node.js Server (Proxy)
 
-**Use GitHub Codespaces**
+```bash
+cd app/server
+npm install
+ALIGN_URL=http://localhost:8000/align npm run dev
+```
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+This service will run on `http://localhost:8787`.
 
-## What technologies are used for this project?
+### 3. React Frontend
 
-This project is built with:
+```bash
+npm install
+VITE_API_BASE=http://localhost:8787 npm run dev
+```
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
-
-## How can I deploy this project?
-
-Simply open [Lovable](https://lovable.dev/projects/fd029b32-bf3e-4684-b6eb-183b2da3d2d2) and click on Share -> Publish.
-
-## Can I connect a custom domain to my Lovable project?
-
-Yes, you can!
-
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/tips-tricks/custom-domain#step-by-step-guide)
+The frontend will be available at `http://localhost:5173` (or another port if 5173 is in use).
