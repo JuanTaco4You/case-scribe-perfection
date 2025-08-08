@@ -15,7 +15,7 @@ To run the application, you will need to run all three services concurrently in 
 
 ```bash
 cd alignment_service
-python -m venv .venv
+python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 ./run.sh
