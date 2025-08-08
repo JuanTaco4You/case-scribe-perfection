@@ -1,0 +1,44 @@
+INSTRUCTIONS (Frontend):
+- Use your existing TranscriptAnalyzer.tsx.
+- When receiving the /api/analyze JSON, consume `downloads.txt_base64` and `downloads.docx_base64`.
+- To trigger download in the browser:
+
+```ts
+function downloadBase64(b64: string, filename: string, mime: string) {
+  const bytes = atob(b64);
+  const buf = new Uint8Array(bytes.length);
+  for (let i = 0; i < bytes.length; i++) buf[i] = bytes.charCodeAt(i);
+  const blob = new Blob([buf], { type: mime });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+```
+
+- Example after the API call:
+```ts
+setAnalysisData(data.analysis);
+setCorrectedTranscript(data.correctedTranscript);
+setDownloads({
+  txt: { b64: data.downloads.txt_base64, name: data.downloads.filenames.txt, mime: 'text/plain' },
+  docx: { b64: data.downloads.docx_base64, name: data.downloads.filenames.docx, mime: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' },
+});
+```
+
+SERVER SETUP:
+- Terminal 1 (Python aligner):
+    cd alignment_service
+    python -m venv .venv && source .venv/bin/activate
+    pip install -r requirements.txt
+    ./run.sh
+- Terminal 2 (Node server proxy):
+    cd app/server
+    npm i
+    ALIGN_URL=http://localhost:8000/align npm run dev
+- Terminal 3 (Frontend):
+    cd app
+    npm i
+    VITE_API_BASE=http://localhost:8787 npm run dev
