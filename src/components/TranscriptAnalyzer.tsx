@@ -5,25 +5,29 @@ import { Progress } from '@/components/ui/progress';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
 import { FileUpload } from './FileUpload';
-import { TranscriptViewer } from './TranscriptViewer';
 import { AnalysisResults } from './AnalysisResults';
 import { N8NWorkflow } from './N8NWorkflow';
 import { Scale, FileText, Volume2, Sparkles, Download, Workflow } from 'lucide-react';
 
+type ErrorType = 'spelling' | 'grammar' | 'audio_mismatch' | 'legal_term';
+
+interface AnalysisError {
+  line: number;
+  column: number;
+  original: string;
+  suggested: string;
+  confidence: number;
+  type: ErrorType;
+}
+interface AnalysisSummary {
+  totalErrors: number;
+  byType: Record<string, number>;
+  confidenceScore: number;
+  processingTime: number;
+}
 interface AnalysisData {
-  errors: Array<{
-    line: number;
-    column: number;
-    original: string;
-    suggested: string;
-    confidence: number;
-    type: 'spelling' | 'grammar' | 'audio_mismatch' | 'legal_term';
-  }>;
-  statistics: {
-    totalErrors: number;
-    confidenceScore: number;
-    processingTime: number;
-  };
+  errors: AnalysisError[];
+  summary: AnalysisSummary;
 }
 
 export const TranscriptAnalyzer: React.FC = () => {
@@ -55,9 +59,9 @@ export const TranscriptAnalyzer: React.FC = () => {
   const handleAnalyze = async () => {
     if (!transcriptFile || !audioFile) {
       toast({
-        title: "Missing Files",
-        description: "Please upload both transcript and audio files",
-        variant: "destructive",
+        title: 'Missing Files',
+        description: 'Please upload both transcript and audio files',
+        variant: 'destructive',
       });
       return;
     }
@@ -66,49 +70,49 @@ export const TranscriptAnalyzer: React.FC = () => {
     setProgress(0);
 
     try {
-      if (!transcriptFile || !audioFile) return; // Should not happen due to button disable logic, but good for type safety
-      const formData = new FormData();
-      formData.append('transcript', transcriptFile);
-      formData.append('audio', audioFile);
+      const apiBase = (import.meta.env.VITE_API_BASE || 'http://localhost:8787').replace(/\/$/, '');
+      const url = `${apiBase}/api/analyze`;
 
-      // Simulate progress while uploading and processing
+      const form = new FormData();
+      // server accepts 'rtx' OR 'rtf'; we send 'rtx' consistently
+      form.append('rtx', transcriptFile);
+      form.append('audio', audioFile);
+
       setProgress(10);
-      toast({ title: "Uploading files...", duration: 2000 });
-      await new Promise(resolve => setTimeout(resolve, 1000));
-
-      const response = await fetch('/api/analyze', {
-        method: 'POST',
-        body: formData,
-      });
+      const resp = await fetch(url, { method: 'POST', body: form });
 
       setProgress(50);
-      toast({ title: "Analyzing transcript...", description: "This may take a moment.", duration: 4000 });
 
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+      if (!resp.ok) {
+        const text = await resp.text().catch(() => '');
+        console.error('Analyze API error', resp.status, text);
+        throw new Error(`API ${resp.status}: ${text || 'Unknown error'}`);
       }
 
-      const data = await response.json();
+      const data = await resp.json();
+      // shape: { analysis: { errors, summary }, correctedTranscript, downloads? }
+      setAnalysisData(data.analysis as AnalysisData);
+      setCorrectedTranscript(data.correctedTranscript || '');
+
+      if (data.downloads?.txt_base64 && data.downloads?.docx_base64) {
+        setDownloads({
+          txt: { b64: data.downloads.txt_base64, name: data.downloads.filenames?.txt || 'corrected_transcript.txt', mime: 'text/plain' },
+          docx: { b64: data.downloads.docx_base64, name: data.downloads.filenames?.docx || 'corrected_transcript.docx', mime: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' },
+        });
+      } else {
+        setDownloads(null);
+      }
 
       setProgress(100);
-
-      setAnalysisData(data.analysis);
-      setCorrectedTranscript(data.correctedTranscript);
-      setDownloads({
-        txt: { b64: data.downloads.txt_base64, name: data.downloads.filenames.txt, mime: 'text/plain' },
-        docx: { b64: data.downloads.docx_base64, name: data.downloads.filenames.docx, mime: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' },
-      });
-
       toast({
-        title: "Analysis Complete",
-        description: `Found ${data.analysis.errors.length} potential errors with ${Math.round(data.analysis.statistics.confidenceScore * 100)}% confidence`,
-        variant: "default",
+        title: 'Analysis Complete',
+        description: `Found ${data.analysis?.summary?.totalErrors ?? 0} potential issues • confidence ${Math.round((data.analysis?.summary?.confidenceScore ?? 0) * 100)}%`,
       });
-    } catch (error) {
+    } catch (err: any) {
       toast({
-        title: "Analysis Failed",
-        description: "An error occurred during transcript analysis",
-        variant: "destructive",
+        title: 'Analysis Failed',
+        description: err?.message || 'An error occurred during transcript analysis',
+        variant: 'destructive',
       });
     } finally {
       setIsProcessing(false);
@@ -118,21 +122,17 @@ export const TranscriptAnalyzer: React.FC = () => {
   return (
     <div className="min-h-screen bg-gradient-subtle">
       <div className="container mx-auto px-4 py-8">
-        {/* Header */}
         <div className="text-center mb-12">
           <div className="flex items-center justify-center gap-3 mb-4">
             <Scale className="h-8 w-8 text-accent" />
-            <h1 className="text-4xl font-bold text-foreground">
-              Court Transcript Analyzer
-            </h1>
+            <h1 className="text-4xl font-bold text-foreground">Court Transcript Analyzer</h1>
           </div>
           <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
-            AI-powered transcript analysis and correction for legal professionals. 
+            AI-powered transcript analysis and correction for legal professionals.
             Upload your caseCatalyst files for automated error detection and correction.
           </p>
         </div>
 
-        {/* Main Content */}
         <div className="max-w-6xl mx-auto">
           <Tabs defaultValue="upload" className="space-y-6">
             <TabsList className="grid w-full grid-cols-4">
@@ -162,9 +162,7 @@ export const TranscriptAnalyzer: React.FC = () => {
                       <FileText className="h-5 w-5 text-primary" />
                       Transcript File
                     </CardTitle>
-                    <CardDescription>
-                      Upload your caseCatalyst transcript file (.txt, .rtf, or .doc)
-                    </CardDescription>
+                    <CardDescription>Upload your caseCatalyst transcript file (.txt, .rtf, or .doc)</CardDescription>
                   </CardHeader>
                   <CardContent>
                     <FileUpload
@@ -182,9 +180,7 @@ export const TranscriptAnalyzer: React.FC = () => {
                       <Volume2 className="h-5 w-5 text-primary" />
                       Audio File
                     </CardTitle>
-                    <CardDescription>
-                      Upload the corresponding audio recording (.wav, .mp3, or .m4a)
-                    </CardDescription>
+                    <CardDescription>Upload the corresponding audio recording (.wav, .mp3, or .m4a)</CardDescription>
                   </CardHeader>
                   <CardContent>
                     <FileUpload
@@ -205,7 +201,7 @@ export const TranscriptAnalyzer: React.FC = () => {
                   size="xl"
                   className="min-w-[200px]"
                 >
-                  {isProcessing ? "Analyzing..." : "Start Analysis"}
+                  {isProcessing ? 'Analyzing...' : 'Start Analysis'}
                 </Button>
               </div>
             </TabsContent>
@@ -215,24 +211,18 @@ export const TranscriptAnalyzer: React.FC = () => {
                 <Card className="shadow-card">
                   <CardHeader>
                     <CardTitle>Analysis in Progress</CardTitle>
-                    <CardDescription>
-                      AI is analyzing your transcript and audio files...
-                    </CardDescription>
+                    <CardDescription>AI is analyzing your transcript and audio files...</CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-4">
                     <Progress value={progress} className="w-full" />
-                    <p className="text-sm text-muted-foreground text-center">
-                      {Math.round(progress)}% Complete
-                    </p>
+                    <p className="text-sm text-muted-foreground text-center">{Math.round(progress)}% Complete</p>
                   </CardContent>
                 </Card>
               ) : (
                 <Card className="shadow-card">
                   <CardHeader>
                     <CardTitle>Ready to Analyze</CardTitle>
-                    <CardDescription>
-                      Upload your files in the Upload tab to begin analysis
-                    </CardDescription>
+                    <CardDescription>Upload your files in the Upload tab to begin analysis</CardDescription>
                   </CardHeader>
                 </Card>
               )}
